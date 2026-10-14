@@ -35,6 +35,8 @@ Documentation-only tasks follow the same docs-first and minimal-change principle
 - Keep edits focused on the task and its approved tests.
 - Avoid unrelated refactoring, renaming, formatting, dependency changes or new abstractions.
 - Reuse existing helpers and conventions when they fit the task.
+- Add code comments or docstrings only when essential to explain a non-obvious reason, tradeoff, constraint or public contract. Do not narrate the code, restate names or explain ordinary Python syntax.
+- Prefer clear code over explanatory comments. Keep necessary comments short and focused on why a choice was made; operator configuration guidance and project documentation may still explain how settings are used.
 - Refactor only when necessary for the requested behaviour; keep it local and preserve unrelated behaviour.
 - If a broader change is necessary, explain why and include its behaviour in the tests presented for approval.
 
@@ -69,13 +71,16 @@ Prioritise correctness, readability and maintainability over strict coding conve
 All review comments must be understandable to someone with basic programming knowledge who is still learning Python.
 
 - Use simple, direct English and avoid jargon when simpler words work.
-- Keep comments concise, ideally 2–4 sentences.
-- Explain what is wrong, why it matters and how it could be fixed.
+- Start with a high-level explanation that makes sense without reading the code. Prefer a short everyday analogy when it accurately explains the issue; do not force one or let it replace the actual explanation.
+- Use the labelled sections in the Review Comment Format below. Aim for one short sentence per section, adding a second only when needed for clarity.
+- Explain what is wrong, why it matters, how it could be fixed and why that fix helps.
 - Use a concrete service or job example when helpful.
+- Name the relevant setting or function where needed, then explain its purpose in ordinary words. Explain unavoidable technical terms when first used.
+- A small diagram is allowed when it makes an order of events or relationship easier to understand. Keep the written explanation understandable without the diagram.
 - Avoid lengthy theory, overly formal language, excessive praise and filler.
 - Be constructive and respectful. Critique the code, not the author.
 
-Prefer:
+For wording within these sections, prefer:
 
 "This retry sends another generation request after the first response is lost. Ollama may still be processing the original request, so the same job could run twice. Preserve the uncertain outcome and reconcile resources instead of resending generation."
 
@@ -129,7 +134,7 @@ Only flag these when they cause an actual problem or introduce meaningful risk s
 - Functions that are unnecessarily difficult to understand or names that obscure important state.
 - Repeated code that could reasonably be extracted without adding more complexity.
 - Unnecessary complexity or mixed responsibilities that make changes difficult.
-- Missing explanations for complicated intent, dead code or accidental debugging code.
+- Missing essential explanations for non-obvious intent or tradeoffs, dead code or accidental debugging code.
 - Tests that miss the task's required behaviour, assert the wrong contract or hide a real failure.
 - Changes that weaken regression coverage or exceed the task without a clear need.
 
@@ -156,23 +161,31 @@ Do not suggest new schedulers, databases, model brokers or homelab repair featur
 For each issue, provide:
 
 1. **Title:** A short, plain-English description with its priority.
-2. **Problem:** What is wrong.
-3. **Impact:** What could happen during service operation or development.
-4. **Suggestion:** A simple, actionable recommendation.
+2. **High level:** Explain the issue as simply as possible, preferably with an accurate everyday analogy. Assume the reader has not read the code.
+3. **Issue:** State what the code currently does incorrectly and the conditions that trigger it. Name the relevant setting or function when helpful.
+4. **Impact:** Explain the practical consequence for gaming, jobs, security or service operation. Distinguish a current failure from a risk that applies to future unimplemented code.
+5. **Suggested fix:** Give the smallest concrete change that addresses the issue.
+6. **Rationale:** Explain why that change prevents the stated consequence. Do not merely repeat the suggested fix.
 
-Keep the entire comment short. Combine problem, impact and suggestion into one paragraph when possible. Follow any required automated review output format while keeping this content in the finding.
+Use these exact labels, in this order, with each section in its own short paragraph. Do not compress them into one dense paragraph. Keep optional improvements clearly marked as P3/Nit and use the same structure.
+
+Follow any required automated review output format. Put the labelled explanation inside the finding's permitted comment/body field; do not add unsupported fields. If paragraph breaks are prohibited, retain the labels and order in the allowed text format.
+
+Optional diagrams belong after the written sections. Prefer a tiny text diagram such as `cancel recorded -> request may still run -> slot stays reserved`. Use a short Mermaid diagram only when the review interface supports it. Show the relevant behaviour, label whether it is current or suggested, and avoid large architecture diagrams or code dumps.
 
 Example:
 
 **[P1] Cancelled job releases the slot before Ollama stops**
 
-"This code frees the inference slot as soon as the job becomes cancelled. The owned Ollama request may still be running, so the next job could start before resources are safely released. Keep the slot reserved until reconciliation confirms release."
+**High level:** Cancelling a parking reservation does not move the car out of the space; the space is free only after the car leaves.
 
-For optional improvements:
+**Issue:** Cancelling a running job immediately frees Gate's inference slot, even though its Ollama request may still be running.
 
-**[P3] Nit: Name the deadline more clearly**
+**Impact:** Another job could start while the previous request is still using resources, increasing GPU contention.
 
-"`timeout` stores the last time a queued job may start. Naming it `admission_deadline` would make it easier to distinguish from the whole attempt deadline."
+**Suggested fix:** Keep the slot reserved until resource checks confirm it is safe to release.
+
+**Rationale:** The next job must then wait for confirmed release, rather than relying on the cancellation record alone.
 
 Do not include lengthy explanations, multiple alternative implementations or large code snippets unless necessary.
 

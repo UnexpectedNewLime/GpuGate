@@ -1,0 +1,4 @@
+interface:
+  display_name: "Test Explain"
+  short_description: "Explain test cases with source links and purpose"
+  default_prompt: "Use $test-explain to explain each test case in simple English with its source line and purpose."

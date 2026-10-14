@@ -1,0 +1,4 @@
+interface:
+  display_name: "Local Review"
+  short_description: "Review local changes before committing or opening a PR"
+  default_prompt: "Use $review to review my local changes before committing and produce a clear report."
