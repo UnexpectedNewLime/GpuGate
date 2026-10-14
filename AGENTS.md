@@ -35,6 +35,8 @@ Documentation-only tasks follow the same docs-first and minimal-change principle
 - Keep edits focused on the task and its approved tests.
 - Avoid unrelated refactoring, renaming, formatting, dependency changes or new abstractions.
 - Reuse existing helpers and conventions when they fit the task.
+- Add code comments or docstrings only when essential to explain a non-obvious reason, tradeoff, constraint or public contract. Do not narrate the code, restate names or explain ordinary Python syntax.
+- Prefer clear code over explanatory comments. Keep necessary comments short and focused on why a choice was made; operator configuration guidance and project documentation may still explain how settings are used.
 - Refactor only when necessary for the requested behaviour; keep it local and preserve unrelated behaviour.
 - If a broader change is necessary, explain why and include its behaviour in the tests presented for approval.
 
@@ -132,7 +134,7 @@ Only flag these when they cause an actual problem or introduce meaningful risk s
 - Functions that are unnecessarily difficult to understand or names that obscure important state.
 - Repeated code that could reasonably be extracted without adding more complexity.
 - Unnecessary complexity or mixed responsibilities that make changes difficult.
-- Missing explanations for complicated intent, dead code or accidental debugging code.
+- Missing essential explanations for non-obvious intent or tradeoffs, dead code or accidental debugging code.
 - Tests that miss the task's required behaviour, assert the wrong contract or hide a real failure.
 - Changes that weaken regression coverage or exceed the task without a clear need.
 

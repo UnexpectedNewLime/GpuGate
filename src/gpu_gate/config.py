@@ -1,6 +1,7 @@
 """Read immutable startup settings; configuration loading performs file I/O only."""
 
 import math
+import re
 import tomllib
 from dataclasses import dataclass, field
 from ipaddress import IPv4Address, IPv6Address, ip_address, ip_network
@@ -190,11 +191,13 @@ def _credential(
         raise ConfigError(f"{name}: could not read credential file") from None
     if not isinstance(secret, str) or not secret.strip():
         raise ConfigError(f"{name}: credential file is empty or invalid")
-    return secret.strip()
+    secret = secret.strip()
+    if re.fullmatch(r"[A-Za-z0-9._~+/\-]+=*", secret) is None:
+        raise ConfigError(f"{name}: credential has an invalid bearer-token format")
+    return secret
 
 
 def _endpoint_address(host: str) -> IPv4Address | IPv6Address:
-    """Treat IPv4 and its mapped IPv6 spelling as the same address."""
     address = ip_address(host)
     if isinstance(address, IPv6Address) and address.ipv4_mapped is not None:
         return address.ipv4_mapped

@@ -141,6 +141,9 @@ operator_file = "REPLACE_WITH_OPERATOR_CREDENTIAL_FILE"
 #   Supply a separate credential file; do not put the token itself in this TOML.
 #   Surrounding whitespace, including LF/CRLF line endings, is removed from
 #   both credential values before storage and comparison.
+#   Tokens must then contain only ASCII letters, digits or - . _ ~ + /,
+#   with optional trailing = padding. Embedded whitespace/control characters
+#   and other characters are rejected; internal characters are not removed.
 #
 # credentials.operator_file
 #   File holding the separate operator credential for guarded service controls.

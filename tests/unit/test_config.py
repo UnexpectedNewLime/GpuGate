@@ -1,5 +1,3 @@
-"""Proposed startup configuration contract; no live host or network access."""
-
 import importlib
 import socket
 import subprocess
@@ -48,8 +46,6 @@ operator_file = "operator.token"
 
 
 class FakeSecretReader:
-    """Callable secret reader; relative paths resolve beside the TOML file."""
-
     def __init__(self, directory: Path) -> None:
         self.values = {
             directory / "watcher.token": WATCHER_SECRET,
@@ -75,9 +71,7 @@ def forbid_network_and_host_commands(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def config() -> ModuleType:
-    # Import inside the fixture so pytest collects every proposed case even
-    # before the implementation exists. Missing implementation is an error,
-    # not a skip or an expected failure.
+    # Import here so missing implementation does not prevent test collection.
     return importlib.import_module("gpu_gate.config")
 
 
@@ -558,6 +552,45 @@ def test_credential_file_whitespace_is_removed_before_storage(
 
     assert settings.credentials.watcher == WATCHER_SECRET
     assert settings.credentials.operator == OPERATOR_SECRET
+
+
+@pytest.mark.parametrize("role", ["watcher", "operator"])
+@pytest.mark.parametrize(
+    "invalid",
+    ["\n", "\r", "\r\n", "\t", "\x00", " ", "é", "="],
+    ids=["lf", "cr", "crlf", "tab", "nul", "space", "non-ascii", "internal-padding"],
+)
+def test_invalid_bearer_credential_characters_are_rejected_without_leaking_tokens(
+    config: ModuleType,
+    config_file: Path,
+    secrets: FakeSecretReader,
+    role: str,
+    invalid: str,
+) -> None:
+    token = f"synthetic{invalid}extra"
+    secrets.values[config_file.parent / f"{role}.token"] = token
+
+    with pytest.raises(config.ConfigError) as caught:
+        config.load_settings(config_file, secrets)
+
+    assert f"credentials.{role}_file" in str(caught.value)
+    assert token not in str(caught.value)
+    assert token not in repr(caught.value)
+
+
+@pytest.mark.parametrize("role", ["watcher", "operator"])
+def test_valid_bearer_alphabet_and_trailing_padding_are_preserved(
+    config: ModuleType,
+    config_file: Path,
+    secrets: FakeSecretReader,
+    role: str,
+) -> None:
+    token = "AZaz09-._~+/=="
+    secrets.values[config_file.parent / f"{role}.token"] = f" \t{token}\r\n"
+
+    settings = config.load_settings(config_file, secrets)
+
+    assert getattr(settings.credentials, role) == token
 
 
 @pytest.mark.parametrize(
