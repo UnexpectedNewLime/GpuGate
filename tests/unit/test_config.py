@@ -241,6 +241,39 @@ def test_required_settings_have_no_silent_defaults(
     assert field in str(caught.value)
 
 
+def test_gpu_observations_cannot_be_removed_from_required_sources(
+    config: ModuleType, config_file: Path, secrets: FakeSecretReader
+) -> None:
+    config_file.write_text(
+        VALID_TOML.replace(
+            'required_sources = ["gpu", "game_sessions"]',
+            'required_sources = ["game_sessions"]',
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(config.ConfigError) as caught:
+        config.load_settings(config_file, secrets)
+
+    assert "detectors.required_sources" in str(caught.value)
+
+
+def test_requiring_gpu_does_not_make_the_proposed_session_veto_mandatory(
+    config: ModuleType, config_file: Path, secrets: FakeSecretReader
+) -> None:
+    config_file.write_text(
+        VALID_TOML.replace(
+            'required_sources = ["gpu", "game_sessions"]',
+            'required_sources = ["gpu"]',
+        ),
+        encoding="utf-8",
+    )
+
+    assert config.load_settings(config_file, secrets).detectors.required_sources == (
+        "gpu",
+    )
+
+
 @pytest.mark.parametrize(
     "old,new,field",
     [
@@ -362,6 +395,54 @@ def test_explicit_tailnet_bind_is_accepted_without_network_discovery(
     assert config.load_settings(config_file, secrets).server.bind == "100.100.100.100"
 
 
+@pytest.mark.parametrize(
+    "backend_host,bind",
+    [("127.0.0.1", "127.0.0.1"), ("[0:0:0:0:0:0:0:1]", "::1")],
+    ids=["same-ipv4-endpoint", "equivalent-ipv6-endpoint"],
+)
+def test_gate_listener_cannot_use_the_configured_ollama_endpoint(
+    config: ModuleType,
+    config_file: Path,
+    secrets: FakeSecretReader,
+    backend_host: str,
+    bind: str,
+) -> None:
+    config_file.write_text(
+        VALID_TOML.replace(
+            'url = "http://127.0.0.1:11434"',
+            f'url = "http://{backend_host}:11434"',
+        )
+        .replace('bind = "127.0.0.1"', f'bind = "{bind}"')
+        .replace("port = 11435", "port = 11434"),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(config.ConfigError) as caught:
+        config.load_settings(config_file, secrets)
+
+    assert "server.port" in str(caught.value)
+
+
+@pytest.mark.parametrize("bind", ["100.100.100.100", "127.0.0.2"])
+def test_ollama_port_is_allowed_on_a_separate_explicit_address(
+    config: ModuleType,
+    config_file: Path,
+    secrets: FakeSecretReader,
+    bind: str,
+) -> None:
+    config_file.write_text(
+        VALID_TOML.replace('bind = "127.0.0.1"', f'bind = "{bind}"').replace(
+            "port = 11435", "port = 11434"
+        ),
+        encoding="utf-8",
+    )
+
+    settings = config.load_settings(config_file, secrets)
+
+    assert settings.server.bind == bind
+    assert settings.server.port == 11434
+
+
 @pytest.mark.parametrize("text", ["[gpu\n", "\xff", 'ownership = "' + WATCHER_SECRET])
 def test_unreadable_toml_has_a_safe_file_error(
     config: ModuleType,
@@ -413,6 +494,32 @@ def test_empty_credentials_are_rejected(
         config.load_settings(config_file, secrets)
 
     assert "credentials.watcher_file" in str(caught.value)
+
+
+@pytest.mark.parametrize("same_file", [False, True], ids=["same-content", "same-file"])
+def test_watcher_and_operator_cannot_share_a_credential(
+    config: ModuleType,
+    config_file: Path,
+    secrets: FakeSecretReader,
+    same_file: bool,
+) -> None:
+    if same_file:
+        config_file.write_text(
+            VALID_TOML.replace(
+                'operator_file = "operator.token"', 'operator_file = "watcher.token"'
+            ),
+            encoding="utf-8",
+        )
+    else:
+        secrets.values[config_file.parent / "operator.token"] = WATCHER_SECRET
+
+    with pytest.raises(config.ConfigError) as caught:
+        config.load_settings(config_file, secrets)
+
+    assert "credentials.operator_file" in str(caught.value)
+    for value in (WATCHER_SECRET, OPERATOR_SECRET):
+        assert value not in str(caught.value)
+        assert value not in repr(caught.value)
 
 
 def test_settings_are_immutable_and_file_edits_require_another_load(

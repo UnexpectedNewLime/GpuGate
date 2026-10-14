@@ -251,6 +251,8 @@ def load_settings(path: Path, secrets: SecretReader) -> Settings:
     )
     if any(source not in ("gpu", "game_sessions") for source in required_sources):
         raise ConfigError("detectors.required_sources: unsupported source")
+    if "gpu" not in required_sources:
+        raise ConfigError("detectors.required_sources: gpu observations are required")
     detector_settings = DetectorSettings(
         required_sources,
         _number(
@@ -272,6 +274,18 @@ def load_settings(path: Path, secrets: SecretReader) -> Settings:
     server_settings = ServerSettings(
         _bind(server["bind"]), _integer(server["port"], "server.port", 1, 65535)
     )
+    backend_endpoint = urlsplit(backend_settings.url)
+    backend_host = backend_endpoint.hostname
+    bind_address = ip_address(server_settings.bind)
+    if server_settings.port == backend_endpoint.port and (
+        (backend_host == "localhost" and bind_address.is_loopback)
+        or (
+            backend_host is not None
+            and backend_host != "localhost"
+            and ip_address(backend_host) == bind_address
+        )
+    ):
+        raise ConfigError("server.port: listener conflicts with the Ollama endpoint")
     models = _table(data["models"], "models", ("allowlist",))
     model_settings = ModelSettings(_strings(models["allowlist"], "models.allowlist"))
     retention = _table(
@@ -298,6 +312,10 @@ def load_settings(path: Path, secrets: SecretReader) -> Settings:
             secrets,
         ),
     )
+    if credential_settings.watcher == credential_settings.operator:
+        raise ConfigError(
+            "credentials.operator_file: watcher and operator credentials must differ"
+        )
     return Settings(
         ownership,
         controls,
