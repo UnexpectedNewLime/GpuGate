@@ -136,7 +136,7 @@ def _backend_url(value: object) -> str:
         parsed = urlsplit(url)
         hostname = parsed.hostname
         loopback = hostname == "localhost" or (
-            hostname is not None and ip_address(hostname).is_loopback
+            hostname is not None and _endpoint_address(hostname).is_loopback
         )
         valid = (
             parsed.scheme == "http"
@@ -163,7 +163,9 @@ def _bind(value: object) -> str:
         address = ip_address(bind)
         # Range validation does not prove this address belongs to the host's
         # tailnet. Routing and authenticated private exposure need deployment checks.
-        private = address.is_loopback or address in ip_network("100.64.0.0/10")
+        private = _endpoint_address(bind).is_loopback or address in ip_network(
+            "100.64.0.0/10"
+        )
     except ValueError:
         private = False
     if not private:
@@ -192,7 +194,7 @@ def _credential(
 
 
 def _endpoint_address(host: str) -> IPv4Address | IPv6Address:
-    """Compare IPv4 and its mapped IPv6 spelling as the same endpoint."""
+    """Treat IPv4 and its mapped IPv6 spelling as the same address."""
     address = ip_address(host)
     if isinstance(address, IPv6Address) and address.ipv4_mapped is not None:
         return address.ipv4_mapped
