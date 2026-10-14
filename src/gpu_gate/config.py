@@ -133,6 +133,8 @@ def _policy(value: object, name: str, supported: str) -> str:
 def _backend_url(value: object) -> str:
     name = "backend.url"
     url = _string(value, name)
+    if any(ord(character) < 32 or ord(character) == 127 for character in url):
+        raise ConfigError(f"{name}: ASCII control characters are not allowed")
     try:
         parsed = urlsplit(url)
         hostname = parsed.hostname
@@ -199,8 +201,11 @@ def _credential(
 
 def _endpoint_address(host: str) -> IPv4Address | IPv6Address:
     address = ip_address(host)
-    if isinstance(address, IPv6Address) and address.ipv4_mapped is not None:
-        return address.ipv4_mapped
+    if isinstance(address, IPv6Address):
+        if address.scope_id is not None:
+            raise ValueError("Scoped IPv6 addresses are not supported")
+        if address.ipv4_mapped is not None:
+            return address.ipv4_mapped
     return address
 
 

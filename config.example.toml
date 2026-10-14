@@ -99,6 +99,7 @@ operator_file = "REPLACE_WITH_OPERATOR_CREDENTIAL_FILE"
 #   This is Ollama's endpoint, separate from Gate's own HTTP listener below.
 #   The loader requires HTTP on loopback port 11434, with no embedded credentials,
 #   query string or fragment. It does not contact Ollama while loading settings.
+#   ASCII control characters anywhere in the URL are rejected before parsing.
 #
 # server.bind
 #   Local address Gate's future HTTP API will listen on. 127.0.0.1 allows local
@@ -114,6 +115,7 @@ operator_file = "REPLACE_WITH_OPERATOR_CREDENTIAL_FILE"
 #   separate explicit address is allowed. A localhost backend is treated as
 #   potentially using either loopback address, without doing a DNS lookup.
 #   IPv4-mapped IPv6 spellings also count as the corresponding IPv4 address.
+#   IPv6 scope suffixes such as %1 or %lo are rejected in backend and bind addresses.
 #
 # models.allowlist
 #   Model names callers will be permitted to request. Requests for other models

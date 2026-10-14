@@ -1,4 +1,5 @@
 import importlib
+import json
 import socket
 import subprocess
 from dataclasses import FrozenInstanceError
@@ -361,6 +362,36 @@ def test_backend_urls_cannot_redirect_inference_or_expose_secrets(
     assert WATCHER_SECRET not in repr(caught.value)
 
 
+@pytest.mark.parametrize("position", ["leading", "middle", "trailing"])
+@pytest.mark.parametrize(
+    "control",
+    [chr(code) for code in range(32)] + [chr(127)],
+    ids=[f"ascii-{code:02x}" for code in range(32)] + ["ascii-7f"],
+)
+def test_backend_url_rejects_ascii_control_characters_in_every_position(
+    config: ModuleType,
+    config_file: Path,
+    secrets: FakeSecretReader,
+    control: str,
+    position: str,
+) -> None:
+    base_url = "http://127.0.0.1:11434"
+    url = {
+        "leading": control + base_url,
+        "middle": "http://127.0.0." + control + "1:11434",
+        "trailing": base_url + control,
+    }[position]
+    config_file.write_text(
+        VALID_TOML.replace(json.dumps(base_url), json.dumps(url)), encoding="utf-8"
+    )
+
+    with pytest.raises(config.ConfigError) as caught:
+        config.load_settings(config_file, secrets)
+
+    assert "backend.url" in str(caught.value)
+    assert secrets.calls == []
+
+
 @pytest.mark.parametrize("bind", ["0.0.0.0", "::", "8.8.8.8", "192.168.1.20"])
 def test_public_wildcard_and_lan_bind_addresses_are_rejected(
     config: ModuleType,
@@ -479,6 +510,40 @@ def test_mapped_loopback_addresses_are_allowed_without_an_endpoint_collision(
 
     assert settings.backend.url == f"http://{backend_host}:11434"
     assert (settings.server.bind, settings.server.port) == (bind, port)
+
+
+@pytest.mark.parametrize("field", ["backend.url", "server.bind"])
+@pytest.mark.parametrize("port", [11434, 11435], ids=["same-port", "different-port"])
+@pytest.mark.parametrize(
+    "scoped",
+    ["::1%1", "::1%lo", "::1%251", "::ffff:127.0.0.1%1"],
+    ids=["numeric-scope", "named-scope", "uri-encoded-scope", "mapped-scope"],
+)
+def test_ipv6_scopes_are_rejected_in_backend_and_listener_settings(
+    config: ModuleType,
+    config_file: Path,
+    secrets: FakeSecretReader,
+    field: str,
+    port: int,
+    scoped: str,
+) -> None:
+    unscoped = scoped.split("%", 1)[0]
+    backend_host = scoped if field == "backend.url" else unscoped
+    bind = scoped if field == "server.bind" else unscoped
+    config_file.write_text(
+        VALID_TOML.replace(
+            'url = "http://127.0.0.1:11434"',
+            f'url = "http://[{backend_host}]:11434"',
+        )
+        .replace('bind = "127.0.0.1"', f'bind = "{bind}"')
+        .replace("port = 11435", f"port = {port}"),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(config.ConfigError) as caught:
+        config.load_settings(config_file, secrets)
+
+    assert field in str(caught.value)
 
 
 @pytest.mark.parametrize("text", ["[gpu\n", "\xff", 'ownership = "' + WATCHER_SECRET])

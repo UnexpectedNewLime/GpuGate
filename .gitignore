@@ -222,3 +222,6 @@ __marimo__/
 # Machine-specific agent instructions
 /LOCAL.md
 /.vscode/
+
+# Local skill reports and reproduction artifacts
+/reports/

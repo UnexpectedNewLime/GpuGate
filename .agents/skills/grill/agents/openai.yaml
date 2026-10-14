@@ -1,0 +1,4 @@
+interface:
+  display_name: "Grill"
+  short_description: "Deeply audit code and rank bugs, risks and improvements"
+  default_prompt: "Use $grill to aggressively audit my code and produce a prioritised report separating bugs from conditional risks."
