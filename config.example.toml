@@ -113,6 +113,7 @@ operator_file = "REPLACE_WITH_OPERATOR_CREDENTIAL_FILE"
 #   Gate cannot use Ollama's address and port together. The same port on a
 #   separate explicit address is allowed. A localhost backend is treated as
 #   potentially using either loopback address, without doing a DNS lookup.
+#   IPv4-mapped IPv6 spellings also count as the corresponding IPv4 address.
 #
 # models.allowlist
 #   Model names callers will be permitted to request. Requests for other models
@@ -138,6 +139,8 @@ operator_file = "REPLACE_WITH_OPERATOR_CREDENTIAL_FILE"
 #   File holding the watcher's bearer credential for submitting jobs, reading
 #   its own jobs and cancelling them. It does not grant operator controls.
 #   Supply a separate credential file; do not put the token itself in this TOML.
+#   Surrounding whitespace, including LF/CRLF line endings, is removed from
+#   both credential values before storage and comparison.
 #
 # credentials.operator_file
 #   File holding the separate operator credential for guarded service controls.

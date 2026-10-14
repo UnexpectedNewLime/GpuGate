@@ -340,6 +340,7 @@ def test_unknown_fields_and_sections_are_rejected(
     "url",
     [
         "http://192.168.1.20:11434",
+        "http://[::ffff:192.168.1.20]:11434",
         "https://example.com:11434",
         "http://127.0.0.1:11434?token=" + WATCHER_SECRET,
         "http://127.0.0.1:11434#" + WATCHER_SECRET,
@@ -397,8 +398,18 @@ def test_explicit_tailnet_bind_is_accepted_without_network_discovery(
 
 @pytest.mark.parametrize(
     "backend_host,bind",
-    [("127.0.0.1", "127.0.0.1"), ("[0:0:0:0:0:0:0:1]", "::1")],
-    ids=["same-ipv4-endpoint", "equivalent-ipv6-endpoint"],
+    [
+        ("127.0.0.1", "127.0.0.1"),
+        ("[0:0:0:0:0:0:0:1]", "::1"),
+        ("[::ffff:127.0.0.1]", "127.0.0.1"),
+        ("127.0.0.1", "::ffff:127.0.0.1"),
+    ],
+    ids=[
+        "same-ipv4-endpoint",
+        "equivalent-ipv6-endpoint",
+        "mapped-backend-ipv4-listener",
+        "ipv4-backend-mapped-listener",
+    ],
 )
 def test_gate_listener_cannot_use_the_configured_ollama_endpoint(
     config: ModuleType,
@@ -443,6 +454,39 @@ def test_ollama_port_is_allowed_on_a_separate_explicit_address(
     assert settings.server.port == 11434
 
 
+@pytest.mark.parametrize(
+    "backend_host,bind,port",
+    [
+        ("[::ffff:127.0.0.1]", "127.0.0.1", 11435),
+        ("[::ffff:127.0.0.1]", "100.100.100.100", 11434),
+        ("127.0.0.1", "::ffff:127.0.0.1", 11435),
+    ],
+    ids=["different-port", "different-address", "mapped-listener-different-port"],
+)
+def test_mapped_loopback_addresses_are_allowed_without_an_endpoint_collision(
+    config: ModuleType,
+    config_file: Path,
+    secrets: FakeSecretReader,
+    backend_host: str,
+    bind: str,
+    port: int,
+) -> None:
+    config_file.write_text(
+        VALID_TOML.replace(
+            'url = "http://127.0.0.1:11434"',
+            f'url = "http://{backend_host}:11434"',
+        )
+        .replace('bind = "127.0.0.1"', f'bind = "{bind}"')
+        .replace("port = 11435", f"port = {port}"),
+        encoding="utf-8",
+    )
+
+    settings = config.load_settings(config_file, secrets)
+
+    assert settings.backend.url == f"http://{backend_host}:11434"
+    assert (settings.server.bind, settings.server.port) == (bind, port)
+
+
 @pytest.mark.parametrize("text", ["[gpu\n", "\xff", 'ownership = "' + WATCHER_SECRET])
 def test_unreadable_toml_has_a_safe_file_error(
     config: ModuleType,
@@ -481,7 +525,7 @@ def test_secret_reader_failures_do_not_leak_exception_content(
     assert WATCHER_SECRET not in str(caught.value)
 
 
-@pytest.mark.parametrize("value", ["", "   "])
+@pytest.mark.parametrize("value", ["", "   ", "\n", "\r\n", " \t\r\n"])
 def test_empty_credentials_are_rejected(
     config: ModuleType,
     config_file: Path,
@@ -494,6 +538,53 @@ def test_empty_credentials_are_rejected(
         config.load_settings(config_file, secrets)
 
     assert "credentials.watcher_file" in str(caught.value)
+
+
+@pytest.mark.parametrize("padding", ["\n", "\r\n", " \t"], ids=["lf", "crlf", "spaces"])
+def test_credential_file_whitespace_is_removed_before_storage(
+    config: ModuleType,
+    config_file: Path,
+    secrets: FakeSecretReader,
+    padding: str,
+) -> None:
+    secrets.values[config_file.parent / "watcher.token"] = (
+        f"{padding}{WATCHER_SECRET}{padding}"
+    )
+    secrets.values[config_file.parent / "operator.token"] = (
+        f"{padding}{OPERATOR_SECRET}{padding}"
+    )
+
+    settings = config.load_settings(config_file, secrets)
+
+    assert settings.credentials.watcher == WATCHER_SECRET
+    assert settings.credentials.operator == OPERATOR_SECRET
+
+
+@pytest.mark.parametrize(
+    "watcher_padding,operator_padding",
+    [("", "\n"), ("\n", "\r\n"), (" \t", "")],
+    ids=["plain-vs-lf", "lf-vs-crlf", "spaces-vs-plain"],
+)
+def test_credentials_that_match_after_trimming_are_rejected_without_leaking_tokens(
+    config: ModuleType,
+    config_file: Path,
+    secrets: FakeSecretReader,
+    watcher_padding: str,
+    operator_padding: str,
+) -> None:
+    secrets.values[config_file.parent / "watcher.token"] = (
+        f"{watcher_padding}{WATCHER_SECRET}{watcher_padding}"
+    )
+    secrets.values[config_file.parent / "operator.token"] = (
+        f"{operator_padding}{WATCHER_SECRET}{operator_padding}"
+    )
+
+    with pytest.raises(config.ConfigError) as caught:
+        config.load_settings(config_file, secrets)
+
+    assert "credentials.operator_file" in str(caught.value)
+    assert WATCHER_SECRET not in str(caught.value)
+    assert WATCHER_SECRET not in repr(caught.value)
 
 
 @pytest.mark.parametrize("same_file", [False, True], ids=["same-content", "same-file"])

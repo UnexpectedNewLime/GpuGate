@@ -3,7 +3,7 @@
 import math
 import tomllib
 from dataclasses import dataclass, field
-from ipaddress import ip_address, ip_network
+from ipaddress import IPv4Address, IPv6Address, ip_address, ip_network
 from pathlib import Path
 from typing import Protocol
 from urllib.parse import urlsplit
@@ -188,7 +188,15 @@ def _credential(
         raise ConfigError(f"{name}: could not read credential file") from None
     if not isinstance(secret, str) or not secret.strip():
         raise ConfigError(f"{name}: credential file is empty or invalid")
-    return secret
+    return secret.strip()
+
+
+def _endpoint_address(host: str) -> IPv4Address | IPv6Address:
+    """Compare IPv4 and its mapped IPv6 spelling as the same endpoint."""
+    address = ip_address(host)
+    if isinstance(address, IPv6Address) and address.ipv4_mapped is not None:
+        return address.ipv4_mapped
+    return address
 
 
 def load_settings(path: Path, secrets: SecretReader) -> Settings:
@@ -276,13 +284,13 @@ def load_settings(path: Path, secrets: SecretReader) -> Settings:
     )
     backend_endpoint = urlsplit(backend_settings.url)
     backend_host = backend_endpoint.hostname
-    bind_address = ip_address(server_settings.bind)
+    bind_address = _endpoint_address(server_settings.bind)
     if server_settings.port == backend_endpoint.port and (
         (backend_host == "localhost" and bind_address.is_loopback)
         or (
             backend_host is not None
             and backend_host != "localhost"
-            and ip_address(backend_host) == bind_address
+            and _endpoint_address(backend_host) == bind_address
         )
     ):
         raise ConfigError("server.port: listener conflicts with the Ollama endpoint")
