@@ -1,0 +1,142 @@
+# EXAMPLE SETTINGS
+# GPU thresholds and detector timings are proposals awaiting review/calibration.
+# Replace credential-file placeholders before use. Explanations follow below.
+
+ownership = "shared"
+controls = "guarded"
+
+[gpu]
+hold_percent = 30
+release_percent = 10
+quiet_seconds = 60
+
+[detectors]
+required_sources = ["gpu", "game_sessions"]
+gpu_poll_seconds = 1
+process_poll_seconds = 2
+freshness_seconds = 5
+
+[backend]
+url = "http://127.0.0.1:11434"
+
+[server]
+bind = "127.0.0.1"
+port = 11435
+
+[models]
+allowlist = ["gpt-oss:20b"]
+
+[retention]
+payload_hours = 24
+metadata_days = 7
+
+[credentials]
+watcher_file = "REPLACE_WITH_WATCHER_CREDENTIAL_FILE"
+operator_file = "REPLACE_WITH_OPERATOR_CREDENTIAL_FILE"
+
+# -----------------------------------------------------------------------------
+# SETTING EXPLANATIONS
+# -----------------------------------------------------------------------------
+#
+# About this example
+#   Copy to an operator-controlled location outside this repository.
+#   Only the settings loader is implemented so far. The comments below explain
+#   how the future service will use each setting; they do not enable inference.
+#   Changes apply when settings are loaded at the next service startup.
+#
+# ownership
+#   Ollama is also used by other clients, such as local coding/chat tools.
+#   "shared" means Gate controls only its own inference requests. It must not
+#   restart Ollama, kill its runners or unload a model used by another client.
+#   This is the only supported ownership policy in v1.
+#
+# controls
+#   "guarded" allows pause-inference and return-to-automatic controls.
+#   Returning to automatic, or selecting "Done gaming", still requires fresh
+#   observations and safe resources. These controls cannot force a job to start.
+#   This is the only supported control policy in v1.
+#
+# gpu.hold_percent
+#   Proposed values awaiting policy review and real-host calibration.
+#   Before starting inference, GPU activity at or above this percentage would
+#   stop new jobs from starting. This does not cancel a running Gate job merely
+#   because its own inference raises total GPU activity.
+#
+# gpu.release_percent
+#   After a resource hold or startup, activity must be at or below this percentage
+#   throughout the quiet period before resources can become eligible again.
+#   A lower release threshold than hold threshold avoids rapid on/off changes.
+#   Required relationship: 0 <= release_percent < hold_percent <= 100.
+#
+# gpu.quiet_seconds
+#   Seconds of continuously verified activity at or below release_percent.
+#   A higher reading or missing/stale evidence resets the proposed quiet timer.
+#   Passing this check alone does not override games, low VRAM or uncertain
+#   ownership. This timer is separate from gaming all-clear and GRACE timers.
+#
+# detectors.required_sources
+#   Evidence sources the service must have before admitting inference:
+#   "gpu" supplies GPU resource observations; "game_sessions" supplies automatic
+#   game-session evidence, with Steam/Lutris/Heroic discovery planned.
+#   Missing or failed required evidence means unknown, rather than clear.
+#   These names declare required evidence; adapters are not implemented yet.
+#
+# detectors.gpu_poll_seconds
+#   Seconds between GPU resource samples. 1 means sample once per second.
+#
+# detectors.process_poll_seconds
+#   Seconds between process/game-session scans. 2 means scan every two seconds.
+#   This is separate from GPU polling because process discovery has its own cost.
+#
+# detectors.freshness_seconds
+#   Maximum age in seconds for required observations to remain usable.
+#   Older evidence would block new work; a low old reading cannot prove the PC
+#   is still available. Polling/freshness/quiet durations must be finite and > 0.
+#
+# backend.url
+#   Address Gate will contact for admitted Ollama inference requests.
+#   This is Ollama's endpoint, separate from Gate's own HTTP listener below.
+#   The loader requires HTTP on loopback port 11434, with no embedded credentials,
+#   query string or fragment. It does not contact Ollama while loading settings.
+#
+# server.bind
+#   Local address Gate's future HTTP API will listen on. 127.0.0.1 allows local
+#   access only, including a future private proxy on this PC. For direct tailnet
+#   access, supply the PC's verified tailnet IPv4 address instead.
+#   The loader rejects wildcard, public and LAN addresses; accepting a tailnet
+#   address range does not prove routing, authentication or private exposure.
+#
+# server.port
+#   TCP port for Gate's submit/poll/cancel/status/control API, not Ollama's port.
+#   The caller or private proxy must use this port. Valid range: 1..65535.
+#
+# models.allowlist
+#   Model names callers will be permitted to request. Requests for other models
+#   would be rejected. Listing a model does not download/load it or prove its
+#   memory requirements and compatibility; installed models need verification.
+#
+# retention.payload_hours
+#   Accepted policy: these values must be explicit and are not tunable in v1.
+#   Hours after a job becomes terminal (done, failed, cancelled or expired)
+#   before its prompt/result bodies are due for removal. v1 requires 24.
+#   This is a privacy retention window, not a queue wait or execution deadline.
+#
+# retention.metadata_days
+#   Days after terminal state before minimal job and retry-identity records are
+#   due for removal. Keeping them lets a repeated request resolve to the same
+#   job/outcome instead of creating duplicate inference. v1 requires 7.
+#   Unresolved resource evidence is preserved separately; this is not a promise
+#   of immediate removal from SQLite WAL files or backups.
+#
+# credentials.watcher_file
+#   Replace these placeholders with private credential files outside Git.
+#   Relative paths resolve beside the operator TOML, not the working directory.
+#   File holding the watcher's bearer credential for submitting jobs, reading
+#   its own jobs and cancelling them. It does not grant operator controls.
+#   Supply a separate credential file; do not put the token itself in this TOML.
+#
+# credentials.operator_file
+#   File holding the separate operator credential for guarded service controls.
+#   Phone gaming-session buttons use their own scoped, single-use authority;
+#   neither global bearer credential belongs in those buttons.
+#
