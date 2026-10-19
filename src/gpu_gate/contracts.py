@@ -73,9 +73,11 @@ def _string(value: object, name: str) -> str:
 
 def _timestamp(value: str, name: str) -> datetime:
     try:
-        # fromisoformat normalises overflowing offset minutes instead of rejecting them.
-        offset = re.search(r"[+-]\d{2}:?(\d{2})(?::?\d{2})?(?:[.,]\d+)?$", value)
-        if offset is not None and int(offset[1]) >= 60:
+        # fromisoformat normalises overflowing offset components instead of rejecting them.
+        offset = re.search(r"[+-]\d{2}:?(\d{2})(?::?(\d{2}))?(?:[.,]\d+)?$", value)
+        if offset is not None and any(
+            int(part) >= 60 for part in offset.groups() if part is not None
+        ):
             raise ValueError
         parsed = datetime.fromisoformat(value)
         if parsed.tzinfo is None:

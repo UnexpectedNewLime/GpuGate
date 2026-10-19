@@ -444,6 +444,66 @@ def test_valid_offset_boundaries_preserve_the_utc_instant_and_hash(
     assert result.canonical_hash == equivalent.canonical_hash
 
 
+@pytest.mark.parametrize("field", ["expires_at", "start_not_after"])
+@pytest.mark.parametrize(
+    "offset",
+    [
+        "+01:00:60",
+        "-01:00:60",
+        "+01:00:99",
+        "-01:00:99",
+        "+010060",
+        "-010060",
+        "+01:00:60.5",
+        "-01:00:60,5",
+    ],
+)
+def test_invalid_offset_seconds_are_rejected_without_normalisation(
+    contracts: ModuleType,
+    settings: Settings,
+    payload: dict[str, object],
+    field: str,
+    offset: str,
+) -> None:
+    payload[field] = "2026-10-15T02:10:00" + offset
+    with pytest.raises(contracts.InvalidInput):
+        contracts.parse_submission(encode(payload), ATTEMPT, settings)
+
+
+@pytest.mark.parametrize("field", ["expires_at", "start_not_after"])
+@pytest.mark.parametrize(
+    "offset,seconds",
+    [
+        ("+00:00:00", 0),
+        ("-00:00:00", 0),
+        ("+01:00:59", 3659),
+        ("-01:00:59", -3659),
+        ("+010059", 3659),
+        ("-010059", -3659),
+        ("+01:00:59.5", 3659.5),
+        ("-01:00:59,5", -3659.5),
+        ("+23:59:59", 86_399),
+        ("-23:59:59", -86_399),
+    ],
+)
+def test_valid_offset_seconds_preserve_the_utc_instant_and_hash(
+    contracts: ModuleType,
+    settings: Settings,
+    payload: dict[str, object],
+    field: str,
+    offset: str,
+    seconds: float,
+) -> None:
+    payload[field] = "2026-10-15T02:10:00" + offset
+    result = contracts.parse_submission(encode(payload), ATTEMPT, settings)
+    expected = datetime(2026, 10, 15, 2, 10, tzinfo=UTC) - timedelta(seconds=seconds)
+    assert getattr(result.request, field) == expected
+    payload[field] = expected.isoformat().replace("+00:00", "Z")
+    equivalent = contracts.parse_submission(encode(payload), ATTEMPT, settings)
+    assert result.request == equivalent.request
+    assert result.canonical_hash == equivalent.canonical_hash
+
+
 @pytest.mark.parametrize(
     "expires,start",
     [

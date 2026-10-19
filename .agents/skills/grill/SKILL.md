@@ -41,7 +41,9 @@ Evidence statuses:
 
 ## Report format
 
-Return the complete Markdown report in chat and save it as `reports/grill-<UTC timestamp>.md` under the repository root. Create `reports/` if needed; Git ignores this directory. Keep persistent reproduction scripts and other generated supporting artifacts there too. Do not overwrite previous reports or stage/commit generated output. Link the saved report using its resolved absolute path. Disposable test fixtures may still use temporary directories. Exclude raw credentials/prompts/private payloads.
+Return the complete Markdown report in chat and save it as `reports/<YYYYMMDD-HHMMSS>-gpugate-grill.md` under the repository root. Use UTC for the timestamp (`%Y%m%d-%H%M%S`), for example `20261016-035332-gpugate-grill.md`. If a name already exists, append a numeric suffix before the extension rather than overwriting it. Create `reports/` if needed; Git ignores this directory. Apply this naming convention to new reports; leave existing reports unchanged. Do not stage or commit generated output. Link the saved report using its resolved absolute path.
+
+Only final Markdown reports belong in `reports/`. Put report-generation scripts, reproduction scripts, captured output and other intermediates in a task-owned temporary directory outside `reports/`, using `tempfile.TemporaryDirectory` or equivalent cleanup with `try/finally`. Clean up task-created temporary files on success or failure, and check for remaining task-owned intermediates before the final response. Never delete unrelated or pre-existing files. Include reproduction steps, essential code and relevant results in the Markdown report so it does not depend on temporary files or link to deleted helpers. Exclude raw credentials/prompts/private payloads.
 
 # Grill Report — repository/branch
 
