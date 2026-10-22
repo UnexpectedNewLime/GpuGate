@@ -658,6 +658,32 @@ def test_valid_bearer_alphabet_and_trailing_padding_are_preserved(
     assert getattr(settings.credentials, role) == token
 
 
+@pytest.mark.parametrize("role", ["watcher", "operator"])
+@pytest.mark.parametrize("token_bytes", [4089, 4090])
+@pytest.mark.parametrize("padding", ["", "\r\n"], ids=["plain", "file-newlines"])
+def test_credentials_fit_the_proposed_header_budget_after_trimming(
+    config: ModuleType,
+    config_file: Path,
+    secrets: FakeSecretReader,
+    role: str,
+    token_bytes: int,
+    padding: str,
+) -> None:
+    token = "x" * token_bytes
+    secrets.values[config_file.parent / f"{role}.token"] = f"{padding}{token}{padding}"
+    if token_bytes == 4089:
+        settings = config.load_settings(config_file, secrets)
+        loaded = getattr(settings.credentials, role)
+        assert loaded == token
+        assert len(("Bearer " + loaded).encode("ascii")) == 4096
+    else:
+        with pytest.raises(config.ConfigError) as caught:
+            config.load_settings(config_file, secrets)
+        assert f"credentials.{role}_file" in str(caught.value)
+        assert token not in str(caught.value)
+        assert token not in repr(caught.value)
+
+
 @pytest.mark.parametrize(
     "watcher_padding,operator_padding",
     [("", "\n"), ("\n", "\r\n"), (" \t", "")],

@@ -146,6 +146,8 @@ operator_file = "REPLACE_WITH_OPERATOR_CREDENTIAL_FILE"
 #   Tokens must then contain only ASCII letters, digits or - . _ ~ + /,
 #   with optional trailing = padding. Embedded whitespace/control characters
 #   and other characters are rejected; internal characters are not removed.
+#   After trimming, each token may contain at most 4089 ASCII bytes so its
+#   "Bearer " header fits the 4096-byte Authorization value limit.
 #
 # credentials.operator_file
 #   File holding the separate operator credential for guarded service controls.

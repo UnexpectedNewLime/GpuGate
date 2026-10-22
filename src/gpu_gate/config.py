@@ -196,6 +196,8 @@ def _credential(
     secret = secret.strip()
     if re.fullmatch(r"[A-Za-z0-9._~+/\-]+=*", secret) is None:
         raise ConfigError(f"{name}: credential has an invalid bearer-token format")
+    if len(secret) > 4096 - len("Bearer "):
+        raise ConfigError(f"{name}: credential exceeds the authorization header limit")
     return secret
 
 
